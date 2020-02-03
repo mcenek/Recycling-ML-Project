@@ -20,13 +20,10 @@ GPIO.setup(Relay_Ch1, GPIO.OUT)
 def cam():
     GPIO.output(Relay_Ch1, GPIO.LOW)
     tim = datetime.datetime.now()
-    #tim = int(tim)
     tim = str(tim)
     GPIO.output(Relay_Ch1, GPIO.HIGH)
     try:
         camera.start_recording('/home/pi/Project/vids/test/' + tim + '.h264')
-    #timer = threading.Timer(100, main)
-    #timer.start()
         time.sleep(10)
         camera.stop_recording()
         GPIO.output(Relay_Ch1, GPIO.LOW)
@@ -36,17 +33,11 @@ def cam():
 def print_accel():
     tim = datetime.datetime.now()
     tim = str(tim)
-    #print(tim)
-    #file1 = ("/home/pi/Project/accel/test/" + tim + ".csv")
-    #print(file1
-    #try:
-    while thread1.is_alive():
+    prim_tim = datetime.datetime.now().second
+    fin_tim = datetime.datetime.now().second
+    while fin_tim - prim_tim < 10:
         print("%f %f %f" %acc.acceleration, file = open("/home/pi/Project/accel/test/" + tim +".txt", "a"))
-    #except:
-    #pass
-
-#thread1 = threading.Thread(target=cam, args=())
-#thread2 = threading.Thread(target = print_accel, args=())
+        fin_tim = datetime.datetime.now().second
 
 def main():
     while True:
@@ -68,23 +59,14 @@ def main():
         tim = str(tim)
 
         if distance < 15:
-            global thread1 
             thread1 = threading.Thread(target=cam, args=())
-            #thread1
             thread1.start()
-            #with open("/home/pi/Project/accel/test/" + tim + ".txt", "w") as f:
-            #while thread1.is_alive():#this needs to be threaded because the printing blocks the code
-                #print("%f %f %f" %acc.acceleration, file = open("/home/pi/Project/accel/test/" + tim +".txt", "a"))
-                #print("hi")
 
             thread2 = threading.Thread(target = print_accel, args=())
             thread2.start()
-            #while thread1.isAlive():
-            #thread2
-                #thread2.start()
             
-            #thread1.join()
-            #thread2.join()
+            thread1.join()
+            thread2.join()
 
 
 if __name__ == "__main__":
