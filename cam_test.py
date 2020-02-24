@@ -1,4 +1,5 @@
 from picamera import PiCamera
+from gps import *
 import datetime, time, board, os, signal, subprocess, threading, concurrent.futures, busio
 import adafruit_adxl34x
 import RPi.GPIO as GPIO
@@ -14,11 +15,29 @@ trig = 6
 Relay_Ch1 = 20
 
 global dur
-dur= 10
+dur = 10
 
 GPIO.setup(echo, GPIO.IN)
 GPIO.setup(trig, GPIO.OUT)
 GPIO.setup(Relay_Ch1, GPIO.OUT)
+
+class GPSpoller(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.session = gps(mode=WATCH_ENABLE)
+        self.current_value = None
+
+    def get_current_value(self):
+        return self.current_value
+
+    def run(self):
+        try:
+            while True:
+                self.current_value = self.session.next()
+                time.sleep(0.2)
+
+        except StopIteration:
+            pass
 
 def cam():
     GPIO.output(Relay_Ch1, GPIO.LOW)
@@ -27,6 +46,7 @@ def cam():
     GPIO.output(Relay_Ch1, GPIO.HIGH)
     try:
         camera.start_recording('/home/pi/Recycling-ML-Project/vids/test/' + tim + '.h264')
+#        camera.start_recording('/home/pi/Recycling-ML-Project/vids/test/' + filename + '.h264')
         time.sleep(dur)
         camera.stop_recording()
         GPIO.output(Relay_Ch1, GPIO.LOW)
@@ -39,19 +59,26 @@ def print_accel():
     prim_tim = datetime.datetime.now().second
     fin_tim = datetime.datetime.now().second
     while fin_tim - prim_tim < dur:
-        print("%f %f %f" %acc.acceleration, file = open("/home/pi/Recycling-ML-Project/accel/test/" + tim +".txt", "a"))
+        print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + tim +".txt", "a"))
+#        print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + filename +".txt", "a"))
         fin_tim = datetime.datetime.now().second
 
 def mic():
     tim = datetime.datetime.now()
     tim = str(tim)
     name = tim + '.wav'
-    print(name)
+#    print(name)
     cmd = f"arecord -D plughw:1 -c1 -r 48000 -f S32_LE -t wav --duration={dur} -V mono -v {name}"
     subprocess.Popen(cmd, shell=True)
 
 def main():
+#    gpsp = GPSpoller()
+#    gpsp.start()
+
     while True:
+#        gpsp = GPSpoller()
+#        gpsp.start()
+
         GPIO.output(trig, GPIO.HIGH)
         time.sleep(0.001)
         GPIO.output(trig, GPIO.LOW)
@@ -68,8 +95,20 @@ def main():
         #print(distance)
         tim = datetime.datetime.now()
         tim = str(tim)
+        try:
+            if gpsp.get_current_value()['class'] == 'TPV':
+                lon = gpsp.get_current_value().lon
+                lat = gpsp.get_current_value().lat
+                gps_time = gpsp.get_current_value().time
+#                print(lon, lat, gps_time)
+                file_name = str(lon) + ',' + str(lat) + ',' + str(gps_time)
+#                print(file_name)
+        except:
+            pass
 
+#        print(file_name)
         if distance < 15:
+            
             thread1 = threading.Thread(target=cam, args=())
             thread1.start()
 
@@ -85,4 +124,6 @@ def main():
 
 
 if __name__ == "__main__":
+    gpsp = GPSpoller()
+    gpsp.start()
     main()
