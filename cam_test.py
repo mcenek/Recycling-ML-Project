@@ -1,5 +1,6 @@
 from picamera import PiCamera
 from gps import *
+from getkey import getkey, keys
 import datetime, time, board, os, signal, subprocess, threading, concurrent.futures, busio
 import adafruit_adxl34x
 import RPi.GPIO as GPIO
@@ -43,10 +44,20 @@ def cam():
     GPIO.output(Relay_Ch1, GPIO.LOW)
     tim = datetime.datetime.now()
     tim = str(tim)
+#    try:
+#        if gpsp.get_current_value()['class'] == 'TPV':
+#            lon = gpsp.get_current_value().lon
+#            lat = gpsp.get_current_value().lat
+#            gps_time = gpsp.get_current_value().time
+#            print(lon, lat, gps_time)
+#            file_name = str(lon) + ',' + str(lat) + ',' + str(gps_time)
+#            print(file_name)
+#    except:
+#        pass
     GPIO.output(Relay_Ch1, GPIO.HIGH)
     try:
         camera.start_recording('/home/pi/Recycling-ML-Project/vids/test/' + tim + '.h264')
-#        camera.start_recording('/home/pi/Recycling-ML-Project/vids/test/' + filename + '.h264')
+        #camera.start_recording('/home/pi/Recycling-ML-Project/vids/test/' + file_name + '.h264')
         time.sleep(dur)
         camera.stop_recording()
         GPIO.output(Relay_Ch1, GPIO.LOW)
@@ -68,17 +79,21 @@ def mic():
     tim = str(tim)
     name = tim + '.wav'
 #    print(name)
-    cmd = f"arecord -D plughw:1 -c1 -r 48000 -f S32_LE -t wav --duration={dur} -V mono -v {name}"
-    subprocess.Popen(cmd, shell=True)
+    cmd = ["arecord", "-D", "plughw:1", "-c1", "-r", "48000", "-f", "S32_LE", "-t", "wav", "--duration=10", "-V", "mono", "-v", name]
+    #cmd = f"arecord -D plughw:1 -c1 -r 48000 -f S32_LE -t wav --duration={dur} -V mono -v {name}"
+    #subprocess.Popen(cmd, shell=True)
+    subprocess.Popen(cmd)
 
 def main():
 #    gpsp = GPSpoller()
 #    gpsp.start()
 
+   # key = getkey()
+
     while True:
 #        gpsp = GPSpoller()
 #        gpsp.start()
-
+#        key = getkey()
         GPIO.output(trig, GPIO.HIGH)
         time.sleep(0.001)
         GPIO.output(trig, GPIO.LOW)
@@ -121,7 +136,11 @@ def main():
             thread1.join()
             thread2.join()
             thread3.join()
-
+        
+#        if key == 'c':
+#            GPIO.output(Relay_Ch1, GPIO.LOW)
+#            GPIO.output(Relay_Ch1, GPIO.HIGH)
+#            sys.exit()
 
 if __name__ == "__main__":
     gpsp = GPSpoller()
