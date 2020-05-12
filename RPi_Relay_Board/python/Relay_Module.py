@@ -28,29 +28,29 @@ try:
 		#Control the Channel 1
 		GPIO.output(Relay_Ch1,GPIO.LOW)
 		print("Channel 1:The Common Contact is access to the Normal Open Contact!")
-		time.sleep(2)
+		time.sleep(0.5)
 	
 		GPIO.output(Relay_Ch1,GPIO.HIGH)
 		print("Channel 1:The Common Contact is access to the Normal Closed Contact!\n")
 		time.sleep(0.5)
 
 		#Control the Channel 2
-#		GPIO.output(Relay_Ch2,GPIO.LOW)
-#		print("Channel 2:The Common Contact is access to the Normal Open Contact!")
+		GPIO.output(Relay_Ch2,GPIO.LOW)
+		print("Channel 2:The Common Contact is access to the Normal Open Contact!")
 		time.sleep(0.5)
 		
-#		GPIO.output(Relay_Ch2,GPIO.HIGH)
-#		print("Channel 2:The Common Contact is access to the Normal Closed Contact!\n")
-#		time.sleep(0.5)
+		GPIO.output(Relay_Ch2,GPIO.HIGH)
+		print("Channel 2:The Common Contact is access to the Normal Closed Contact!\n")
+		time.sleep(0.5)
 
 		#Control the Channel 3
-#		GPIO.output(Relay_Ch3,GPIO.LOW)
-#		print("Channel 3:The Common Contact is access to the Normal Open Contact!")
-#		time.sleep(0.5)
+		GPIO.output(Relay_Ch3,GPIO.LOW)
+		print("Channel 3:The Common Contact is access to the Normal Open Contact!")
+		time.sleep(0.5)
 		
-#		GPIO.output(Relay_Ch3,GPIO.HIGH)
-#		print("Channel 3:The Common Contact is access to the Normal Closed Contact!\n")
-#		time.sleep(0.5)
+		GPIO.output(Relay_Ch3,GPIO.HIGH)
+		print("Channel 3:The Common Contact is access to the Normal Closed Contact!\n")
+		time.sleep(0.5)
 		
 except:
 	print("except")

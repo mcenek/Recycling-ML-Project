@@ -60,9 +60,10 @@ def cam():
         #camera.start_recording('/home/pi/Recycling-ML-Project/vids/test/' + file_name + '.h264')
         time.sleep(dur)
         camera.stop_recording()
-        GPIO.output(Relay_Ch1, GPIO.LOW)
+       # GPIO.output(Relay_Ch1, GPIO.LOW)
     except:
         pass
+    GPIO.output(Relay_Ch1, GPIO.LOW)
 
 def print_accel():
     tim = datetime.datetime.now()
@@ -130,12 +131,12 @@ def main():
             thread2 = threading.Thread(target = print_accel, args=())
             thread2.start()
 
-            thread3 = threading.Thread(target = mic, args=())
-            thread3.start()
+#            thread3 = threading.Thread(target = mic, args=())
+#            thread3.start()
             
             thread1.join()
             thread2.join()
-            thread3.join()
+#            thread3.join()
         
 #        if key == 'c':
 #            GPIO.output(Relay_Ch1, GPIO.LOW)
