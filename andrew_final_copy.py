@@ -35,12 +35,13 @@ echo = 5
 trig = 6
 Relay_Ch1 = 20 #Currently using relay channel 2 on relay board, variable name not updated
 
+running = True
 
 """
 Set up of GPIO pins
 """
-GPIO.setup(echo, GPIO.IN)
-GPIO.setup(trig, GPIO.OUT)
+GPIO.setup(echo, GPIO.IN) #pin that reads the proximity
+GPIO.setup(trig, GPIO.OUT) #pin that triggers the proximity sensor
 GPIO.setup(Relay_Ch1, GPIO.OUT) #the relay channels
 
 """
@@ -49,6 +50,10 @@ Will continuously be pulling/reading in the GPS coordinates
 Separate class since this will always be running due to extended boot time if turned on/off
 """
 class GPSpoller(threading.Thread):
+
+    def end_thread(self):
+        running=False
+
     def __init__(self):
         threading.Thread.__init__(self)
         self.session = gps(mode=WATCH_ENABLE)
@@ -59,7 +64,7 @@ class GPSpoller(threading.Thread):
 
     def run(self):
         try:
-            while True:
+            while running:
                 self.current_value = self.session.next()
                 time.sleep(0.2)
 
@@ -80,7 +85,7 @@ def cam(tim):
 
     #GPIO.output(Relay_Ch1, GPIO.HIGH)
     try:
-        camera.start_recording('/home/pi/Recycling-ML-Project/vids/test_andrew/' + tim + '.h264')
+        camera.start_recording('/home/pi/Recycling-ML-Project/vids/test_john/' + tim + '.h264')
         #time.sleep(dur)
         camera.wait_recording(dur)
         camera.stop_recording()
@@ -88,27 +93,34 @@ def cam(tim):
         print("general camera error, continuing")
         camera.stop_recording()
         pass
-    
+
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(Relay_Ch1, GPIO.OUT)
     GPIO.output(Relay_Ch1, GPIO.LOW)
 
 def print_accel(tim):
+    global acc
+    global properACCBoot
+
 #     tim = datetime.datetime.now()
 #     tim = str(tim)
     prim_tim = tim.second
     fin_tim = tim.second
     tim = str(tim)
-    
+
     #Constantly be taking in reading from accelerometer while in the time window
     #If not possible i.e. accel error, update finish time and pass error
-    
+    print(fin_tim - prim_tim)
+    print(dur)
     while fin_tim - prim_tim < dur:
         try:
-            print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + tim +".txt", "a"))
+            print("%f %f %f" %acc.acceleration, file = open("./accel/johns_tests/" + tim +".txt", "a"))
             #print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + filename +".txt", "a"))
             fin_tim = datetime.datetime.now().second
         except:
             fin_tim = datetime.datetime.now().second
             #If global definition of properACCBoot is still 0, try and see if connected for next iteration
+
             if properACCBoot == 0:
                 try:
                     acc = adafruit_adxl34x.ADXL345(i2c)
@@ -116,8 +128,8 @@ def print_accel(tim):
                 except:
                     pass
             pass
-    print("Camera has finished recording")
-    
+    print("Finished gathering accelerometer data")
+
 def mic(tim):
 #     tim = datetime.datetime.now()
 #     tim = str(tim)
@@ -130,8 +142,8 @@ def mic(tim):
 
 #Just to get the official start time that will be fed into all the threads
 def globalTimer():
-#     return datetime.datetime.now()
-    return time.time()
+    return datetime.datetime.now()
+#    return time.time()
 
 """
 Main method
@@ -140,13 +152,14 @@ While loop that will continuously run, waiting for motion sensor to trigger coll
 of the data.
 """
 def main():
+    global running
     previousCoordinates = "File_name_n_a"
-    while True:
+    while running:
         try:
             GPIO.output(trig, GPIO.HIGH)
             time.sleep(0.001)
             GPIO.output(trig, GPIO.LOW)
-            
+
             count = time.time()
             while GPIO.input(echo) == 0 and time.time() - count < 0.1:
                 pulse = time.time()
@@ -155,7 +168,7 @@ def main():
             while GPIO.input(echo) == 1 and time.time() - count < 0.1:
                 pulse_end = time.time()
 
-            distance = round((pulse_end - pulse) * 17150, 2)
+            distance = round((pulse_end - pulse) * 17150, 2) #converts to cm
             tim = datetime.datetime.now()
             tim = str(tim)
             try:
@@ -181,13 +194,16 @@ def main():
 
                 thread3 = threading.Thread(target = mic, args=(globalTime,))
                 thread3.start()
-                    
+
                 thread1.join()
                 thread2.join()
                 thread3.join()
+
                 GPIO.output(Relay_Ch1, GPIO.LOW)
                 print("Video successfully captured")
         except KeyboardInterrupt:
+            running=False
+
             print("keyboard interrupt, program terminating")
             activeThreads = threading.enumerate()
             print(activeThreads)
