@@ -81,6 +81,7 @@ def cam(tim):
     #NOTE: adjust date/time pulling because no internet access on live routes
     #GPIO.output(Relay_Ch1, GPIO.LOW) #change back to low
 #     tim = datetime.datetime.
+
     tim = str(tim)
 
     #GPIO.output(Relay_Ch1, GPIO.HIGH)
@@ -94,9 +95,9 @@ def cam(tim):
         camera.stop_recording()
         pass
 
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(Relay_Ch1, GPIO.OUT)
-    GPIO.output(Relay_Ch1, GPIO.LOW)
+    #GPIO.setmode(GPIO.BCM)
+    #GPIO.setup(Relay_Ch1, GPIO.OUT)
+    #GPIO.output(Relay_Ch1, GPIO.LOW)
 
 def print_accel(tim):
     global acc
@@ -104,8 +105,8 @@ def print_accel(tim):
 
 #     tim = datetime.datetime.now()
 #     tim = str(tim)
-    prim_tim = tim.second
-    fin_tim = tim.second
+    prim_tim = time.perf_counter()
+    fin_tim = time.perf_counter()
     tim = str(tim)
 
     #Constantly be taking in reading from accelerometer while in the time window
@@ -116,9 +117,9 @@ def print_accel(tim):
         try:
             print("%f %f %f" %acc.acceleration, file = open("./accel/johns_tests/" + tim +".txt", "a"))
             #print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + filename +".txt", "a"))
-            fin_tim = datetime.datetime.now().second
+            fin_tim = time.perf_counter()
         except:
-            fin_tim = datetime.datetime.now().second
+            fin_tim = time.perf_counter()
             #If global definition of properACCBoot is still 0, try and see if connected for next iteration
 
             if properACCBoot == 0:
@@ -127,18 +128,21 @@ def print_accel(tim):
                     properACCBoot = 1
                 except:
                     pass
-            pass
+
     print("Finished gathering accelerometer data")
 
 def mic(tim):
 #     tim = datetime.datetime.now()
 #     tim = str(tim)
+    print("entered mic method")
     name = str(tim) + '.wav'
 #    print(name)
     cmd = ["arecord", "-D", "plughw:1", "-c1", "-r", "48000", "-f", "S32_LE", "-t", "wav", "--duration=10", "-V", "mono", "-v", name]
     #cmd = f"arecord -D plughw:1 -c1 -r 48000 -f S32_LE -t wav --duration={dur} -V mono -v {name}"
     #subprocess.Popen(cmd, shell=True)
+    print("mic method step 2")
     subprocess.Popen(cmd)
+    print("mic method ended")
 
 #Just to get the official start time that will be fed into all the threads
 def globalTimer():
@@ -153,6 +157,7 @@ of the data.
 """
 def main():
     global running
+
     previousCoordinates = "File_name_n_a"
     while running:
         try:
@@ -176,23 +181,24 @@ def main():
                     lon = gpsp.get_current_value().lon
                     lat = gpsp.get_current_value().lat
                     gps_time = gpsp.get_current_value().time
-    #                print(lon, lat, gps_time)
+    #               print(lon, lat, gps_time)
                     previousCoordinates = str(lon) + ',' + str(lat) + ',' + str(gps_time)
                     #print(file_name)
             except:
                 pass
             globalTime = globalTimer()
-    #         try:
+
             if distance < 15:
+
                 GPIO.output(Relay_Ch1, GPIO.HIGH)
                 print("distance less than 15, processing camera\n")
-                thread1 = threading.Thread(target=cam, args=(globalTime,))
+                thread1 = threading.Thread(name='cam_thread', target=cam, args=(globalTime,))
                 thread1.start()
 
-                thread2 = threading.Thread(target = print_accel, args=(globalTime,))
+                thread2 = threading.Thread(name='accel_thread', target = print_accel, args=(globalTime,))
                 thread2.start()
 
-                thread3 = threading.Thread(target = mic, args=(globalTime,))
+                thread3 = threading.Thread(name='mic_thread', target = mic, args=(globalTime,))
                 thread3.start()
 
                 thread1.join()
@@ -201,6 +207,7 @@ def main():
 
                 GPIO.output(Relay_Ch1, GPIO.LOW)
                 print("Video successfully captured")
+
         except KeyboardInterrupt:
             running=False
 

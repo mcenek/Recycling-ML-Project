@@ -1,7 +1,8 @@
 from picamera import PiCamera
 from gps import *
 from getkey import getkey, keys
-import datetime, time, board, os, signal, subprocess, threading, concurrent.futures, busio
+import board, concurrent.futures, busio
+import datetime, time, os, signal, subprocess, threading
 import adafruit_adxl34x
 import RPi.GPIO as GPIO
 
@@ -65,15 +66,18 @@ def cam():
         pass
     GPIO.output(Relay_Ch1, GPIO.LOW)
 
+
 def print_accel():
     tim = datetime.datetime.now()
     tim = str(tim)
     prim_tim = datetime.datetime.now().second
     fin_tim = datetime.datetime.now().second
+    accel_file = open("./accel/test/" + tim +".txt", "a")
     while fin_tim - prim_tim < dur:
-        print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + tim +".txt", "a"))
-#        print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + filename +".txt", "a"))
+        print("%f %f %f" %acc.acceleration, file = accel_file)
         fin_tim = datetime.datetime.now().second
+    accel_file.close()
+
 
 def mic():
     tim = datetime.datetime.now()
@@ -98,7 +102,7 @@ def main():
         GPIO.output(trig, GPIO.HIGH)
         time.sleep(0.001)
         GPIO.output(trig, GPIO.LOW)
-        
+
         count = time.time()
         while GPIO.input(echo) == 0 and time.time() - count < 0.1:
             pulse = time.time()
@@ -124,7 +128,7 @@ def main():
 
 #        print(file_name)
         if distance < 15:
-            
+
             thread1 = threading.Thread(target=cam, args=())
             thread1.start()
 
@@ -133,11 +137,11 @@ def main():
 
 #            thread3 = threading.Thread(target = mic, args=())
 #            thread3.start()
-            
+
             thread1.join()
             thread2.join()
 #            thread3.join()
-        
+
 #        if key == 'c':
 #            GPIO.output(Relay_Ch1, GPIO.LOW)
 #            GPIO.output(Relay_Ch1, GPIO.HIGH)
