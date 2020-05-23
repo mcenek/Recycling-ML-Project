@@ -51,9 +51,6 @@ Separate class since this will always be running due to extended boot time if tu
 """
 class GPSpoller(threading.Thread):
 
-    def end_thread(self):
-        running=False
-
     def __init__(self):
         threading.Thread.__init__(self)
         self.session = gps(mode=WATCH_ENABLE)
@@ -146,8 +143,12 @@ def mic(tim):
 
 #Just to get the official start time that will be fed into all the threads
 def globalTimer():
-    return datetime.datetime.now()
-#    return time.time()
+    global gpsp
+    report=gpsp.get_current_value()
+    if report['class'] == 'TPV':
+        return getattr(report, 'time', '')
+    else:
+        return time.perf_counter
 
 """
 Main method
@@ -157,25 +158,40 @@ of the data.
 """
 def main():
     global running
+    global gpsp
 
     previousCoordinates = "File_name_n_a"
+
+    report=None
+    while(report == None):
+        report=gpsp.get_current_value()
+
+    first_perf= time.perf_counter()
+    if report['class'] == 'TPV':
+        start= getattr(report, 'time', '')
+        print('Time: '+ start + ' Perf: ' + first_perf, file = open("./starting_states/" + str(start) + " " + str(first_perf) + ".txt", "a"))
+    else:
+        print('Perf: ' + str(first_perf), file = open("./starting_states/" + str(first_perf) + ".txt", "a"))
+
     while running:
         try:
             GPIO.output(trig, GPIO.HIGH)
             time.sleep(0.001)
             GPIO.output(trig, GPIO.LOW)
 
-            count = time.time()
-            while GPIO.input(echo) == 0 and time.time() - count < 0.1:
-                pulse = time.time()
+            count = time.perf_counter()
+            pulse = time.perf_counter()
+            while GPIO.input(echo) == 0 and pulse - count < 0.1:
+                pulse = time.perf_counter()
 
-            count = time.time()
-            while GPIO.input(echo) == 1 and time.time() - count < 0.1:
-                pulse_end = time.time()
+            count = time.perf_counter()
+            pulse_end = time.perf_counter()
+            while GPIO.input(echo) == 1 and pulse_end - count < 0.1:
+                pulse_end = time.perf_counter()
 
             distance = round((pulse_end - pulse) * 17150, 2) #converts to cm
-            tim = datetime.datetime.now()
-            tim = str(tim)
+            #tim = datetime.datetime.now()
+            #tim = str(tim)
             try:
                 if gpsp.get_current_value()['class'] == 'TPV':
                     lon = gpsp.get_current_value().lon
