@@ -33,7 +33,7 @@ global dur
 dur = 10
 echo = 5
 trig = 6
-Relay_Ch1 = 20 #Currently using relay channel 2 on relay board, variable name not updated
+Relay_Ch1 = 21 #Currently using relay channel 3 on relay board, variable name not updated
 
 running = True
 
@@ -83,7 +83,7 @@ def cam(tim):
 
     #GPIO.output(Relay_Ch1, GPIO.HIGH)
     try:
-        camera.start_recording('/home/pi/Recycling-ML-Project/vids/test_john/' + tim + '.h264')
+        camera.start_recording('/home/pi/Recycling-ML-Project-johns_testing/vids/test_john/' + tim + '.h264')
         #time.sleep(dur)
         camera.wait_recording(dur)
         camera.stop_recording()
@@ -134,12 +134,10 @@ def mic(tim):
     print("entered mic method")
     name = str(tim) + '.wav'
 #    print(name)
-    cmd = ["arecord", "-D", "plughw:1", "-c1", "-r", "48000", "-f", "S32_LE", "-t", "wav", "--duration=10", "-V", "mono", "-v", name]
+    cmd = ['./mic.sh', name]
     #cmd = f"arecord -D plughw:1 -c1 -r 48000 -f S32_LE -t wav --duration={dur} -V mono -v {name}"
     #subprocess.Popen(cmd, shell=True)
-    print("mic method step 2")
     subprocess.Popen(cmd)
-    print("mic method ended")
 
 #Just to get the official start time that will be fed into all the threads
 def globalTimer():
