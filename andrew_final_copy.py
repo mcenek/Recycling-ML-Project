@@ -33,7 +33,7 @@ global dur
 dur = 10
 echo = 5
 trig = 6
-Relay_Ch1 = 21 #Currently using relay channel 3 on relay board, variable name not updated
+#Relay_Ch1 = 21 #Currently using relay channel 3 on relay board, variable name not updated
 
 running = True
 
@@ -42,7 +42,7 @@ Set up of GPIO pins
 """
 GPIO.setup(echo, GPIO.IN) #pin that reads the proximity
 GPIO.setup(trig, GPIO.OUT) #pin that triggers the proximity sensor
-GPIO.setup(Relay_Ch1, GPIO.OUT) #the relay channels
+#GPIO.setup(Relay_Ch1, GPIO.OUT) #the relay channels
 
 """
 Class GPSpoller
@@ -99,6 +99,7 @@ def cam(tim):
 def print_accel(tim):
     global acc
     global properACCBoot
+    global running
 
 #     tim = datetime.datetime.now()
 #     tim = str(tim)
@@ -110,11 +111,13 @@ def print_accel(tim):
     #If not possible i.e. accel error, update finish time and pass error
     print(fin_tim - prim_tim)
     print(dur)
-    while fin_tim - prim_tim < dur:
+    while fin_tim - prim_tim < dur and running:
         try:
             print("%f %f %f" %acc.acceleration, file = open("./accel/johns_tests/" + tim +".txt", "a"))
+            print("%f" %(fin_tim-prim_tim), file = open("./accel/johns_tests/" + tim +".txt", "a"))
             #print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + filename +".txt", "a"))
             fin_tim = time.perf_counter()
+            time.sleep(0.01)
         except:
             fin_tim = time.perf_counter()
             #If global definition of properACCBoot is still 0, try and see if connected for next iteration
@@ -129,6 +132,7 @@ def print_accel(tim):
     print("Finished gathering accelerometer data")
 
 def mic(tim):
+    global running
 #     tim = datetime.datetime.now()
 #     tim = str(tim)
     print("entered mic method")
@@ -137,7 +141,17 @@ def mic(tim):
     cmd = ['./mic.sh', name]
     #cmd = f"arecord -D plughw:1 -c1 -r 48000 -f S32_LE -t wav --duration={dur} -V mono -v {name}"
     #subprocess.Popen(cmd, shell=True)
-    subprocess.Popen(cmd)
+    p1=subprocess.Popen(cmd)
+    while running == True and p1.poll() == None:
+        print("{poll}".format(poll=p1.poll()))
+        continue
+    print("{poll}".format(poll=p1.poll()))
+    if p1.poll() == None:
+        print("terminated")
+        #p1.terminate()
+        p1.send_signal(signal.SIGINT)
+    print("{poll}".format(poll=p1.poll()))
+    print("Finished recording sound")
 
 #Just to get the official start time that will be fed into all the threads
 def globalTimer():
@@ -204,7 +218,7 @@ def main():
 
             if distance < 15:
 
-                GPIO.output(Relay_Ch1, GPIO.HIGH)
+                #GPIO.output(Relay_Ch1, GPIO.HIGH)
                 print("distance less than 15, processing camera\n")
                 thread1 = threading.Thread(name='cam_thread', target=cam, args=(globalTime,))
                 thread1.start()
@@ -219,7 +233,7 @@ def main():
                 thread2.join()
                 thread3.join()
 
-                GPIO.output(Relay_Ch1, GPIO.LOW)
+                #GPIO.output(Relay_Ch1, GPIO.LOW)
                 print("Video successfully captured")
 
         except KeyboardInterrupt:
@@ -228,7 +242,7 @@ def main():
             print("keyboard interrupt, program terminating")
             activeThreads = threading.enumerate()
             print(activeThreads)
-            GPIO.output(Relay_Ch1, GPIO.LOW) #Turn off Relay Board
+            #GPIO.output(Relay_Ch1, GPIO.LOW) #Turn off Relay Board
             GPIO.cleanup()
             sys.exit()
 
