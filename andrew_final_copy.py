@@ -143,14 +143,14 @@ def mic(tim):
     #subprocess.Popen(cmd, shell=True)
     p1=subprocess.Popen(cmd)
     while running == True and p1.poll() == None:
-        print("{poll}".format(poll=p1.poll()))
+        #print("{poll}".format(poll=p1.poll()))
         continue
-    print("{poll}".format(poll=p1.poll()))
+    #print("{poll}".format(poll=p1.poll()))
     if p1.poll() == None:
         print("terminated")
         #p1.terminate()
         p1.send_signal(signal.SIGINT)
-    print("{poll}".format(poll=p1.poll()))
+    #print("{poll}".format(poll=p1.poll()))
     print("Finished recording sound")
 
 #Just to get the official start time that will be fed into all the threads
@@ -160,7 +160,7 @@ def globalTimer():
     if report['class'] == 'TPV':
         return getattr(report, 'time', '')
     else:
-        return time.perf_counter
+        return time.perf_counter()
 
 """
 Main method
