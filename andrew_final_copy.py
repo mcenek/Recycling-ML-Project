@@ -1,6 +1,5 @@
 from picamera import PiCamera
 from gps import *
-# from getkey import getkey, keys
 import datetime, time, board, os, signal, subprocess, threading, concurrent.futures, busio
 import adafruit_adxl34x
 import RPi.GPIO as GPIO
@@ -33,16 +32,18 @@ global dur
 dur = 10
 echo = 5
 trig = 6
-#Relay_Ch1 = 21 #Currently using relay channel 3 on relay board, variable name not updated
+stale_limit=5
+#Relay_Ch1 = 21 #Uncomment if using relay board
 
-running = True
+running = True #used for keyboard interrupt
+time_sync = False #used for determining whether to use perfs or time
 
 """
 Set up of GPIO pins
 """
 GPIO.setup(echo, GPIO.IN) #pin that reads the proximity
 GPIO.setup(trig, GPIO.OUT) #pin that triggers the proximity sensor
-#GPIO.setup(Relay_Ch1, GPIO.OUT) #the relay channels
+#GPIO.setup(Relay_Ch1, GPIO.OUT) #uncomment for relay channels
 
 """
 Class GPSpoller
@@ -55,14 +56,63 @@ class GPSpoller(threading.Thread):
         threading.Thread.__init__(self)
         self.session = gps(mode=WATCH_ENABLE)
         self.current_value = None
+        self.set_of_values = (None, None) #current_value, time, perf_counter
 
     def get_current_value(self):
         return self.current_value
 
+    def get_set_of_values(self):
+        return self.set_of_values
+
+    def upload_data(self, glob_time):
+        print('Trying to upload')
+        global stale_limit
+
+        if self.set_of_values[0] == None:
+            print('gps not connected')
+            return
+
+        perf_recorded = self.set_of_values[1]
+        latitude = getattr(self.set_of_values[0], 'lat', 0.0)
+        longitude = getattr(self.set_of_values[0], 'lon', 0.0)
+        time_recorded = getattr(self.set_of_values[0], 'time', '')
+        new_perf = time.perf_counter()
+        if time.perf_counter() - self.set_of_values[1] < stale_limit:
+            print('not stale')
+            file_text = "First Perf: " + str(perf_recorded) + "\nLatitude: " + str(latitude) + "\nLongitude: " + str(longitude) + "\nFirst Time: " +  time_recorded + "\nCurrent perf: " + str(new_perf)
+            print(file_text, file = open('/home/pi/Recycling-ML-Project-johns_testing/stop_locations/' + str(glob_time) + '.txt', 'a'))
+        else:
+            print('stale')
+            file_text = "First Perf: " + str(perf_recorded) + "\nLatitude: " + str(latitude) + "\nLongitude: " + str(longitude) + "\nFirst Time: " +  time_recorded + "\nCurrent perf: " + str(new_perf) + "\nData is stale"
+            print(file_text, file = open('/home/pi/Recycling-ML-Project-johns_testing/stop_locations/' + str(glob_time) + '.txt', 'a'))
+
     def run(self):
+        global time_sync
+        old_lat=-1000
+        old_lon=-1000
+
         try:
             while running:
                 self.current_value = self.session.next()
+                if (self.current_value != None):
+                    latitude = getattr(self.current_value, 'lat', 0.0)
+                    longitude = getattr(self.current_value, 'lon',0.0)
+                    if(self.set_of_values[0] != None):
+                        old_lat = getattr(self.set_of_values[0], 'lat', 0.0)
+                        old_lon = getattr(self.set_of_values[0], 'lon', 0.0)
+                    if(self.current_value['class'] == 'TPV' and time_sync == False):
+                        strt_time = "Perf Counter:" + str(time.perf_counter()) +'\nStartup Time:' + getattr(self.current_value, 'time', '')
+                        print(strt_time + "\nLatitude: " + str(latitude) + "\nLongitude: " + str(longitude), file = open('/home/pi/Recycling-ML-Project-johns_testing/gps_startup_times/' + str(time.time()) + '.txt', 'a'))
+                        self.set_of_values = (self.current_value, time.perf_counter())
+                        time_sync = True
+                    elif(self.current_value['class'] == 'TPV' and abs(float(latitude) - float(old_lat)) >= 1 and abs(float(longitude) - float(old_lon)) >= 1):
+                        print("Entered else if section")
+                        self.set_of_values[0]=self.current_value
+                        self.set_of_values[1]=time.perf_counter()
+                        old_lat = getattr(self.current_value, 'lat', 0.0)
+                        old_lon = getattr(self.current_value, 'lon', 0.0)
+                    else:
+                        pass
                 time.sleep(0.2)
 
         except StopIteration:
@@ -101,8 +151,6 @@ def print_accel(tim):
     global properACCBoot
     global running
 
-#     tim = datetime.datetime.now()
-#     tim = str(tim)
     prim_tim = time.perf_counter()
     fin_tim = time.perf_counter()
     tim = str(tim)
@@ -113,8 +161,8 @@ def print_accel(tim):
     print(dur)
     while fin_tim - prim_tim < dur and running:
         try:
-            print("%f %f %f" %acc.acceleration, file = open("./accel/johns_tests/" + tim +".txt", "a"))
-            print("%f" %(fin_tim-prim_tim), file = open("./accel/johns_tests/" + tim +".txt", "a"))
+            print("%f %f %f" %acc.acceleration, file = open("/home/pi/Recycling-ML-Project-johns_testing/accel/johns_tests/" + tim +".txt", "a"))
+            print("%f" %(fin_tim-prim_tim), file = open("/home/pi/Recycling-ML-Project-johns_testing/accel/johns_tests/" + tim +".txt", "a"))
             #print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + filename +".txt", "a"))
             fin_tim = time.perf_counter()
             time.sleep(0.01)
@@ -133,32 +181,27 @@ def print_accel(tim):
 
 def mic(tim):
     global running
-#     tim = datetime.datetime.now()
-#     tim = str(tim)
     print("entered mic method")
-    name = str(tim) + '.wav'
-#    print(name)
-    cmd = ['./mic.sh', name]
-    #cmd = f"arecord -D plughw:1 -c1 -r 48000 -f S32_LE -t wav --duration={dur} -V mono -v {name}"
-    #subprocess.Popen(cmd, shell=True)
+    name = '/home/pi/Recycling-ML-Project-johns_testing/microphone/' + str(tim) + '.wav'
+    cmd = ['/home/pi/Recycling-ML-Project-johns_testing/mic.sh', name]
     p1=subprocess.Popen(cmd)
     while running == True and p1.poll() == None:
-        #print("{poll}".format(poll=p1.poll()))
         continue
-    #print("{poll}".format(poll=p1.poll()))
+    #handles keyboard interrupt
     if p1.poll() == None:
         print("terminated")
-        #p1.terminate()
         p1.send_signal(signal.SIGINT)
-    #print("{poll}".format(poll=p1.poll()))
     print("Finished recording sound")
 
 #Just to get the official start time that will be fed into all the threads
 def globalTimer():
     global gpsp
+    global time_sync
     report=gpsp.get_current_value()
     if report['class'] == 'TPV':
         return getattr(report, 'time', '')
+    elif time_sync:
+        return str(datetime.datetime.now())
     else:
         return time.perf_counter()
 
@@ -174,6 +217,7 @@ def main():
 
     previousCoordinates = "File_name_n_a"
 
+    #keeps us from getting wierd errors
     report=None
     while(report == None):
         report=gpsp.get_current_value()
@@ -181,9 +225,12 @@ def main():
     first_perf= time.perf_counter()
     if report['class'] == 'TPV':
         start= getattr(report, 'time', '')
-        print('Time: '+ start + ' Perf: ' + first_perf, file = open("./starting_states/" + str(start) + " " + str(first_perf) + ".txt", "a"))
+        latitude = report.lat
+        longitude = report.lon
+        file_text = 'Time: '+ start + '\nPerf: ' + first_perf + '\nLatitude: ' + latitude + '\nLongitude: ' + longitude
+        print(file_text, file = open("/home/pi/Recycling-ML-Project-johns_testing/starting_states/" + str(start) + " " + str(first_perf) + ".txt", "a"))
     else:
-        print('Perf: ' + str(first_perf), file = open("./starting_states/" + str(first_perf) + ".txt", "a"))
+        print('Perf: ' + str(first_perf), file = open("/home/pi/Recycling-ML-Project-johns_testing/starting_states/" + str(first_perf) + ".txt", "a"))
 
     while running:
         try:
@@ -218,6 +265,7 @@ def main():
 
             if distance < 15:
 
+                gpsp.upload_data(globalTime)
                 #GPIO.output(Relay_Ch1, GPIO.HIGH)
                 print("distance less than 15, processing camera\n")
                 thread1 = threading.Thread(name='cam_thread', target=cam, args=(globalTime,))
