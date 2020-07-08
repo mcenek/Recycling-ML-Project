@@ -3,7 +3,7 @@ from gps import *
 import datetime, time, board, os, signal, subprocess, threading, concurrent.futures, busio
 import adafruit_adxl34x
 import RPi.GPIO as GPIO
-import time
+
 
 
 """
@@ -29,10 +29,12 @@ except:
 Global definition for time window of recording/reading information and other info
 """
 global dur
-dur = 10
+dur = 10 #in seconds
+stale_limit=5 #in seconds
+stale_reset_distance=0.00001
 echo = 5
 trig = 6
-stale_limit=5
+
 #Relay_Ch1 = 21 #Uncomment if using relay board
 
 running = True #used for keyboard interrupt
@@ -56,7 +58,7 @@ class GPSpoller(threading.Thread):
         threading.Thread.__init__(self)
         self.session = gps(mode=WATCH_ENABLE)
         self.current_value = None
-        self.set_of_values = (None, None) #current_value, time, perf_counter
+        self.set_of_values = [None, None] #current_value, perf_counter
 
     def get_current_value(self):
         return self.current_value
@@ -64,20 +66,29 @@ class GPSpoller(threading.Thread):
     def get_set_of_values(self):
         return self.set_of_values
 
+    """
+    function that sends that records the current gps data and determines if its stale
+    """
     def upload_data(self, glob_time):
         print('Trying to upload')
         global stale_limit
 
+        new_perf = time.perf_counter()
+
+        #makes sure the gps has at least gotten one reading
         if self.set_of_values[0] == None:
-            print('gps not connected')
+            file_text = "Current perf: " + str(new_perf)
+            print(file_text, file = open('/home/pi/Recycling-ML-Project-johns_testing/stop_locations/' + str(glob_time) + '.txt', 'a'))
             return
 
+        #gets values necessary for the print statement
         perf_recorded = self.set_of_values[1]
         latitude = getattr(self.set_of_values[0], 'lat', 0.0)
         longitude = getattr(self.set_of_values[0], 'lon', 0.0)
         time_recorded = getattr(self.set_of_values[0], 'time', '')
-        new_perf = time.perf_counter()
-        if time.perf_counter() - self.set_of_values[1] < stale_limit:
+
+        #prints data to file while determining if it is stale
+        if time.perf_counter() - perf_recorded < stale_limit:
             print('not stale')
             file_text = "First Perf: " + str(perf_recorded) + "\nLatitude: " + str(latitude) + "\nLongitude: " + str(longitude) + "\nFirst Time: " +  time_recorded + "\nCurrent perf: " + str(new_perf)
             print(file_text, file = open('/home/pi/Recycling-ML-Project-johns_testing/stop_locations/' + str(glob_time) + '.txt', 'a'))
@@ -86,34 +97,44 @@ class GPSpoller(threading.Thread):
             file_text = "First Perf: " + str(perf_recorded) + "\nLatitude: " + str(latitude) + "\nLongitude: " + str(longitude) + "\nFirst Time: " +  time_recorded + "\nCurrent perf: " + str(new_perf) + "\nData is stale"
             print(file_text, file = open('/home/pi/Recycling-ML-Project-johns_testing/stop_locations/' + str(glob_time) + '.txt', 'a'))
 
+    """
+    what will constantly happen as the program runs
+    """
     def run(self):
+        #default values
         global time_sync
+        global stale_reset_distance
         old_lat=-1000
         old_lon=-1000
 
         try:
             while running:
                 self.current_value = self.session.next()
+                #only happens if the gps gets a reading
                 if (self.current_value != None):
-                    latitude = getattr(self.current_value, 'lat', 0.0)
-                    longitude = getattr(self.current_value, 'lon',0.0)
-                    if(self.set_of_values[0] != None):
-                        old_lat = getattr(self.set_of_values[0], 'lat', 0.0)
-                        old_lon = getattr(self.set_of_values[0], 'lon', 0.0)
-                    if(self.current_value['class'] == 'TPV' and time_sync == False):
-                        strt_time = "Perf Counter:" + str(time.perf_counter()) +'\nStartup Time:' + getattr(self.current_value, 'time', '')
-                        print(strt_time + "\nLatitude: " + str(latitude) + "\nLongitude: " + str(longitude), file = open('/home/pi/Recycling-ML-Project-johns_testing/gps_startup_times/' + str(time.time()) + '.txt', 'a'))
-                        self.set_of_values = (self.current_value, time.perf_counter())
-                        time_sync = True
-                    elif(self.current_value['class'] == 'TPV' and abs(float(latitude) - float(old_lat)) >= 1 and abs(float(longitude) - float(old_lon)) >= 1):
-                        print("Entered else if section")
-                        self.set_of_values[0]=self.current_value
-                        self.set_of_values[1]=time.perf_counter()
-                        old_lat = getattr(self.current_value, 'lat', 0.0)
-                        old_lon = getattr(self.current_value, 'lon', 0.0)
-                    else:
-                        pass
-                time.sleep(0.2)
+                    if getattr(self.current_value, 'lat', 0.0) != 0.0:
+                        latitude = getattr(self.current_value, 'lat', 0.0)
+                        longitude = getattr(self.current_value, 'lon',0.0)
+                        #only happens if this is not the first reading
+                        if(self.set_of_values[0] != None):
+                            old_lat = getattr(self.set_of_values[0], 'lat', 0.0)
+                            old_lon = getattr(self.set_of_values[0], 'lon', 0.0)
+                        #only happens if this is first reading
+                        if(self.current_value['class'] == 'TPV' and time_sync == False):
+                            strt_time = "Perf Counter:" + str(time.perf_counter()) +'\nStartup Time:' + getattr(self.current_value, 'time', '')
+                            print(strt_time + "\nLatitude: " + str(latitude) + "\nLongitude: " + str(longitude), file = open('/home/pi/Recycling-ML-Project-johns_testing/gps_startup_times/' + str(time.time()) + '.txt', 'a'))
+                            self.set_of_values = [self.current_value, time.perf_counter()]
+                            time_sync = True
+                        #only updates set_of_values if gps has been moving
+                        elif(self.current_value['class'] == 'TPV' and (abs(float(latitude) - float(old_lat)) >= stale_reset_distance or abs(float(longitude) - float(old_lon)) >= stale_reset_distance)):
+                            print("changing data")
+                            self.set_of_values[0]=self.current_value
+                            self.set_of_values[1]=time.perf_counter()
+                            old_lat = getattr(self.current_value, 'lat', 0.0)
+                            old_lon = getattr(self.current_value, 'lon', 0.0)
+                        else:
+                            pass
+                    time.sleep(0.2)
 
         except StopIteration:
             pass
@@ -122,19 +143,15 @@ class GPSpoller(threading.Thread):
 Remaining code manages all the pieces of the project besides the GPS
 """
 
-#Need a way to turn everything off/stop listening for new motion while tracking a current stop
-
+#handles camera recording
 def cam(tim):
-    #NOTE: adjust date/time pulling because no internet access on live routes
     #GPIO.output(Relay_Ch1, GPIO.LOW) #change back to low
-#     tim = datetime.datetime.
-
     tim = str(tim)
-
     #GPIO.output(Relay_Ch1, GPIO.HIGH)
+
+    #if camera is working record video for the expected amount of time
     try:
         camera.start_recording('/home/pi/Recycling-ML-Project-johns_testing/vids/test_john/' + tim + '.h264')
-        #time.sleep(dur)
         camera.wait_recording(dur)
         camera.stop_recording()
     except:
@@ -146,6 +163,9 @@ def cam(tim):
     #GPIO.setup(Relay_Ch1, GPIO.OUT)
     #GPIO.output(Relay_Ch1, GPIO.LOW)
 
+"""
+function that records the accelerometer data
+"""
 def print_accel(tim):
     global acc
     global properACCBoot
@@ -179,15 +199,20 @@ def print_accel(tim):
 
     print("Finished gathering accelerometer data")
 
+"""
+function that records the microphone information
+"""
 def mic(tim):
     global running
     print("entered mic method")
+    #runs a subprocess that records mic information
     name = '/home/pi/Recycling-ML-Project-johns_testing/microphone/' + str(tim) + '.wav'
     cmd = ['/home/pi/Recycling-ML-Project-johns_testing/mic.sh', name]
     p1=subprocess.Popen(cmd)
     while running == True and p1.poll() == None:
         continue
     #handles keyboard interrupt
+    #NOTE eventually work to interrupt subprocess
     if p1.poll() == None:
         print("terminated")
         p1.send_signal(signal.SIGINT)
@@ -249,18 +274,7 @@ def main():
                 pulse_end = time.perf_counter()
 
             distance = round((pulse_end - pulse) * 17150, 2) #converts to cm
-            #tim = datetime.datetime.now()
-            #tim = str(tim)
-            try:
-                if gpsp.get_current_value()['class'] == 'TPV':
-                    lon = gpsp.get_current_value().lon
-                    lat = gpsp.get_current_value().lat
-                    gps_time = gpsp.get_current_value().time
-    #               print(lon, lat, gps_time)
-                    previousCoordinates = str(lon) + ',' + str(lat) + ',' + str(gps_time)
-                    #print(file_name)
-            except:
-                pass
+
             globalTime = globalTimer()
 
             if distance < 15:
