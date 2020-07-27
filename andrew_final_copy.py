@@ -3,6 +3,7 @@ from gps import *
 import datetime, time, board, os, signal, subprocess, threading, concurrent.futures, busio
 import adafruit_adxl34x
 import RPi.GPIO as GPIO
+from goprocam import GoProCamera, constants
 
 
 
@@ -127,7 +128,6 @@ class GPSpoller(threading.Thread):
                             time_sync = True
                         #only updates set_of_values if gps has been moving
                         elif(self.current_value['class'] == 'TPV' and (abs(float(latitude) - float(old_lat)) >= stale_reset_distance or abs(float(longitude) - float(old_lon)) >= stale_reset_distance)):
-                            print("changing data")
                             self.set_of_values[0]=self.current_value
                             self.set_of_values[1]=time.perf_counter()
                             old_lat = getattr(self.current_value, 'lat', 0.0)
@@ -162,6 +162,15 @@ def cam(tim):
     #GPIO.setmode(GPIO.BCM)
     #GPIO.setup(Relay_Ch1, GPIO.OUT)
     #GPIO.output(Relay_Ch1, GPIO.LOW)
+
+"""
+function that records video with the gopro camera
+will have to get time/gps information form the meta data
+"""
+def run_gopro():
+    print('entering gopro method')
+    goproCamera = GoProCamera.GoPro()
+    goproCamera.shoot_video(10)
 
 """
 function that records the accelerometer data
@@ -282,7 +291,7 @@ def main():
                 gpsp.upload_data(globalTime)
                 #GPIO.output(Relay_Ch1, GPIO.HIGH)
                 print("distance less than 15, processing camera\n")
-                thread1 = threading.Thread(name='cam_thread', target=cam, args=(globalTime,))
+                thread1 = threading.Thread(name='cam_thread', target=run_gopro)
                 thread1.start()
 
                 thread2 = threading.Thread(name='accel_thread', target = print_accel, args=(globalTime,))
