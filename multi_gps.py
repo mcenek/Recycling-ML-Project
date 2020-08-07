@@ -9,42 +9,26 @@ from goprocam import GoProCamera, constants
 Initialize/setup all our important items
 Camera, GPIO mode, accelorometer, mic
 """
-camera = PiCamera()
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
-i2c = busio.I2C(board.SCL, board.SDA)
-
-#NOTE: Connection may be loose, make sure accelerometer pressed securely in
-#Variable to track whether acc was properly booted or not
-properACCBoot = 0
-try:
-    acc = adafruit_adxl34x.ADXL345(i2c)
-    properACCBoot = 1
-except:
-    print("Will attempt acc reboot later")
-    pass
 
 """
 Global definition for time window of recording/reading information and other info
 """
-global dur
-dur = 10 #in seconds
-stale_limit=5 #in seconds
-stale_reset_distance=0.00001
 echo = 5
 trig = 6
+stale_limit=5 #in seconds
+stale_reset_distance=0.00001
 
-#Relay_Ch1 = 21 #Uncomment if using relay board
-
-running = True #used for keyboard interrupt
+running = True
 time_sync = False #used for determining whether to use perfs or time
+
 
 """
 Set up of GPIO pins
 """
 GPIO.setup(echo, GPIO.IN) #pin that reads the proximity
 GPIO.setup(trig, GPIO.OUT) #pin that triggers the proximity sensor
-#GPIO.setup(Relay_Ch1, GPIO.OUT) #uncomment for relay channels
 
 """
 Class GPSpoller
@@ -76,6 +60,7 @@ class GPSpoller(threading.Thread):
 
         #makes sure the gps has at least gotten one reading
         if self.set_of_values[0] == None:
+            print('new')
             file_text = "Current perf: " + str(new_perf)
             print(file_text, file = open('/home/pi/Recycling-ML-Project-johns_testing/stop_locations/' + str(glob_time) + '.txt', 'a'))
             return
@@ -138,91 +123,17 @@ class GPSpoller(threading.Thread):
             pass
 
 """
-Remaining code manages all the pieces of the project besides the GPS
-"""
-
-#handles camera recording
-def cam(tim):
-    #GPIO.output(Relay_Ch1, GPIO.LOW) #change back to low
-    tim = str(tim)
-    #GPIO.output(Relay_Ch1, GPIO.HIGH)
-
-    #if camera is working record video for the expected amount of time
-    try:
-        camera.start_recording('/home/pi/Recycling-ML-Project-johns_testing/vids/test_john/' + tim + '.h264')
-        camera.wait_recording(dur)
-        camera.stop_recording()
-    except:
-        print("general camera error, continuing")
-        camera.stop_recording()
-        pass
-
-    #GPIO.setmode(GPIO.BCM)
-    #GPIO.setup(Relay_Ch1, GPIO.OUT)
-    #GPIO.output(Relay_Ch1, GPIO.LOW)
-
-"""
 function that records video with the gopro camera
 will have to get time/gps information form the meta data
+
 """
-def run_gopro(camera):
+def run_gopro():
     print('entering gopro method')
-    camera.shoot_video(10)
-
-"""
-function that records the accelerometer data
-"""
-def print_accel(tim):
-    global acc
-    global properACCBoot
-    global running
-
-    prim_tim = time.perf_counter()
-    fin_tim = time.perf_counter()
-    tim = str(tim)
-
-    #Constantly be taking in reading from accelerometer while in the time window
-    #If not possible i.e. accel error, update finish time and pass error
-    print(fin_tim - prim_tim)
-    print(dur)
-    while fin_tim - prim_tim < dur and running:
-        try:
-            print("%f %f %f" %acc.acceleration, file = open("/home/pi/Recycling-ML-Project-johns_testing/accel/johns_tests/" + tim +".txt", "a"))
-            print("%f" %(fin_tim-prim_tim), file = open("/home/pi/Recycling-ML-Project-johns_testing/accel/johns_tests/" + tim +".txt", "a"))
-            #print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + filename +".txt", "a"))
-            fin_tim = time.perf_counter()
-            time.sleep(0.01)
-        except:
-            fin_tim = time.perf_counter()
-            #If global definition of properACCBoot is still 0, try and see if connected for next iteration
-
-            if properACCBoot == 0:
-                try:
-                    acc = adafruit_adxl34x.ADXL345(i2c)
-                    properACCBoot = 1
-                except:
-                    pass
-
-    print("Finished gathering accelerometer data")
-
-"""
-function that records the microphone information
-"""
-def mic(tim):
-    global running
-    print("entered mic method")
-    #runs a subprocess that records mic information
-    name = '/home/pi/Recycling-ML-Project-johns_testing/microphone/' + str(tim) + '.wav'
-    cmd = ['/home/pi/Recycling-ML-Project-johns_testing/microphone.sh', name]
-    p1=subprocess.Popen(cmd)
-    while running == True and p1.poll() == None:
-        continue
-    #handles keyboard interrupt
-    #NOTE eventually work to interrupt subprocess
-    if p1.poll() == None:
-        print("terminated")
-        p1.send_signal(signal.SIGINT)
-    print("Finished recording sound")
+    goproCamera = GoProCamera.GoPro()
+    my_mac_address="d6:32:60:1d:b6:6e"
+    goproCamera.power_on(my_mac_address)
+    #goproCamera.video_settings('480p', fps='30')
+    goproCamera.shoot_video(10)
 
 #Just to get the official start time that will be fed into all the threads
 def globalTimer():
@@ -246,15 +157,6 @@ def main():
     global gpsp
 
     previousCoordinates = "File_name_n_a"
-    goproCamera = GoProCamera.GoPro()
-
-
-    my_mac_address="d6:32:60:1d:b6:6e"
-    goproCamera.power_on(my_mac_address)
-
-    first_perf=time.perf_counter()
-    while(time.perf_counter() - first_perf < 10):
-        print('waiting')
 
     #keeps us from getting wierd errors
     report=None
@@ -264,10 +166,10 @@ def main():
     first_perf= time.perf_counter()
     if report['class'] == 'TPV':
         start= getattr(report, 'time', '')
-        #latitude = report.lat
-        #longitude = report.lon
-        #file_text = 'Time: '+ start + '\nPerf: ' + first_perf + '\nLatitude: ' + latitude + '\nLongitude: ' + longitude
-        #print(file_text, file = open("/home/pi/Recycling-ML-Project-johns_testing/starting_states/" + str(start) + " " + str(first_perf) + ".txt", "a"))
+        latitude = report.lat
+        longitude = report.lon
+        file_text = 'Time: '+ start + '\nPerf: ' + first_perf + '\nLatitude: ' + latitude + '\nLongitude: ' + longitude
+        print(file_text, file = open("/home/pi/Recycling-ML-Project-johns_testing/starting_states/" + str(start) + " " + str(first_perf) + ".txt", "a"))
     else:
         print('Perf: ' + str(first_perf), file = open("/home/pi/Recycling-ML-Project-johns_testing/starting_states/" + str(first_perf) + ".txt", "a"))
 
@@ -296,19 +198,10 @@ def main():
                 gpsp.upload_data(globalTime)
                 #GPIO.output(Relay_Ch1, GPIO.HIGH)
                 print("distance less than 15, processing camera\n")
-                thread1 = threading.Thread(name='cam_thread', target=run_gopro, args = (goproCamera,))
+                thread1 = threading.Thread(name='cam_thread', target=run_gopro)
                 thread1.start()
 
-                thread2 = threading.Thread(name='accel_thread', target = print_accel, args=(globalTime,))
-                thread2.start()
-
-                thread3 = threading.Thread(name='mic_thread', target = mic, args=(globalTime,))
-                thread3.start()
-
                 thread1.join()
-                thread2.join()
-                thread3.join()
-
                 #GPIO.output(Relay_Ch1, GPIO.LOW)
                 print("Video successfully captured")
 
