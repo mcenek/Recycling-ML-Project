@@ -1,0 +1,5 @@
+First Perf: 857.153117558
+Latitude: 45.577124137
+Longitude: -122.731204593
+First Time: 2020-09-05T19:36:27.000Z
+Current perf: 858.256572841

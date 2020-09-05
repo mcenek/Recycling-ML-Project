@@ -31,6 +31,7 @@ global dur
 dur = 10 #in seconds
 stale_limit=5 #in seconds
 stale_reset_distance=0.00001
+lights = 4
 echo = 5
 trig = 6
 
@@ -44,7 +45,7 @@ Set up of GPIO pins
 """
 GPIO.setup(echo, GPIO.IN) #pin that reads the proximity
 GPIO.setup(trig, GPIO.OUT) #pin that triggers the proximity sensor
-#GPIO.setup(Relay_Ch1, GPIO.OUT) #uncomment for relay channels
+GPIO.setup(lights, GPIO.OUT) #pin that runs the lights
 
 """
 Class GPSpoller
@@ -187,8 +188,8 @@ def print_accel(tim):
     print(dur)
     while fin_tim - prim_tim < dur and running:
         try:
-            print("%f %f %f" %acc.acceleration, file = open("/home/pi/Recycling-ML-Project-johns_testing/accel/johns_tests/" + tim +".txt", "a"))
-            print("%f" %(fin_tim-prim_tim), file = open("/home/pi/Recycling-ML-Project-johns_testing/accel/johns_tests/" + tim +".txt", "a"))
+            print("%f %f %f" %acc.acceleration, file = open("/home/pi/Recycling-ML-Project-johns_testing/accel/" + tim +".txt", "a"))
+            print("%f" %(fin_tim-prim_tim), file = open("/home/pi/Recycling-ML-Project-johns_testing/accel/" + tim +".txt", "a"))
             #print("%f %f %f" %acc.acceleration, file = open("./accel/test/" + filename +".txt", "a"))
             fin_tim = time.perf_counter()
             time.sleep(0.01)
@@ -236,6 +237,13 @@ def globalTimer():
     else:
         return time.perf_counter()
 
+def run_lights():
+    GPIO.output(lights, GPIO.HIGH)
+    first_time=time.perf_counter()
+    while time.perf_counter() - first_time < dur:
+        continue
+    GPIO.output(lights, GPIO.LOW)
+
 """
 Main method
 While loop that will continuously run, waiting for motion sensor to trigger collection
@@ -264,10 +272,10 @@ def main():
     first_perf= time.perf_counter()
     if report['class'] == 'TPV':
         start= getattr(report, 'time', '')
-        #latitude = report.lat
-        #longitude = report.lon
-        #file_text = 'Time: '+ start + '\nPerf: ' + first_perf + '\nLatitude: ' + latitude + '\nLongitude: ' + longitude
-        #print(file_text, file = open("/home/pi/Recycling-ML-Project-johns_testing/starting_states/" + str(start) + " " + str(first_perf) + ".txt", "a"))
+        latitude = report.lat
+        longitude = report.lon
+        file_text = 'Time: '+ start + '\nPerf: ' + str(first_perf) + '\nLatitude: ' + str(latitude) + '\nLongitude: ' + str(longitude)
+        print(file_text, file = open("/home/pi/Recycling-ML-Project-johns_testing/starting_states/" + str(start) + " " + str(first_perf) + ".txt", "a"))
     else:
         print('Perf: ' + str(first_perf), file = open("/home/pi/Recycling-ML-Project-johns_testing/starting_states/" + str(first_perf) + ".txt", "a"))
 
@@ -305,9 +313,13 @@ def main():
                 thread3 = threading.Thread(name='mic_thread', target = mic, args=(globalTime,))
                 thread3.start()
 
+                thread4 = threading.Thread(name='lights_thread', target =run_lights)
+                thread4.start()
+
                 thread1.join()
                 thread2.join()
                 thread3.join()
+                thread4.join()
 
                 #GPIO.output(Relay_Ch1, GPIO.LOW)
                 print("Video successfully captured")
